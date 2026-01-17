@@ -1,723 +1,416 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Estuarium Education Programs</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+<!--
+DROP-IN UPDATE
+1) Replace your <select id="gradeFilter"> options with the updated block below.
+2) Replace your <select id="pillarFilter"> options with the updated block below.
+3) Replace your PROGRAMS constant with the expanded PROGRAMS below.
+4) Replace your COST_CONFIG with the updated version below (adds All Ages + a simple guard).
+5) Replace your calculateCost() and recalc() with the updated versions below (handles non-bookable resources/exhibits cleanly).
+-->
 
-  <!-- Match Estuarium look: flatter UI, Calibri, navy + green blocks like the site footer -->
-  <style>
-    :root{
-      /* Estuarium style guide colors */
-      --blue-1:#b1c3cd;
-      --blue-2:#244191;
-      --blue-3:#467f9c;
-      --green:#7daa6f;
+<!-- 1) Updated Grade Filter (add All Ages) -->
+<select id="gradeFilter" class="filter-select">
+  <option value="">All grade bands</option>
+  <option value="All Ages">All Ages</option>
+  <option value="PreK-2">PreK–2</option>
+  <option value="3-5">Grades 3–5</option>
+  <option value="6-8">Grades 6–8</option>
+  <option value="8-10">Grades 8–10</option>
+  <option value="10-12">Grades 10–12</option>
+  <option value="Adult">Adult</option>
+</select>
 
-      /* Site-like tones sampled from your screenshot (footer/navy + darker green bar) */
-      --site-navy:#203060;
-      --site-green:#70a060;
-
-      /* Neutrals */
-      --bg:#f7f7f7;
-      --panel:#ffffff;
-      --ink:#1a1a1a;
-      --muted:#5b5b5b;
-      --border:rgba(0,0,0,0.12);
-
-      /* UI */
-      --radius-sm:6px;
-      --radius-md:8px;
-      --radius-pill:999px;
-      --shadow:0 2px 10px rgba(0,0,0,0.08);
-      --focus:0 0 0 3px rgba(125,170,111,0.35);
-      --speed:140ms ease-out;
-    }
-
-    *{ box-sizing:border-box; }
-
-    body{
-      margin:0;
-      font-family:Calibri, system-ui, -apple-system, "Segoe UI", sans-serif;
-      background:var(--bg);
-      color:var(--ink);
-    }
-
-    a{ color:inherit; text-decoration:none; }
-
-    .page{ min-height:100vh; display:flex; flex-direction:column; }
-
-    /* Header: flat navy bar like site footer tone */
-    header{
-      padding:18px clamp(16px, 3vw, 36px);
-      background:var(--site-navy);
-      color:#fff;
-      box-shadow:var(--shadow);
-      border-bottom:3px solid rgba(255,255,255,0.10);
-      display:flex;
-      flex-wrap:wrap;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-    }
-
-    .brand{ display:flex; align-items:center; gap:12px; }
-
-    /* Keep your mark, but make it flatter and more “site-like” */
-    .brand-mark{
-      width:34px; height:34px;
-      border-radius:var(--radius-sm);
-      background:
-        linear-gradient(135deg, var(--blue-1) 0%, var(--blue-3) 55%, var(--site-navy) 100%);
-      box-shadow:inset 0 0 0 2px rgba(255,255,255,0.18);
-    }
-
-    .brand-text{ display:flex; flex-direction:column; gap:2px; }
-    .brand-text span:first-child{
-      font-weight:700;
-      letter-spacing:0.06em;
-      font-size:0.78rem;
-      text-transform:uppercase;
-      opacity:0.95;
-    }
-    .brand-text span:last-child{
-      font-size:1.05rem;
-      font-weight:700;
-      line-height:1.15;
-    }
-
-    .header-right{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      flex-wrap:wrap;
-      font-size:0.90rem;
-      opacity:0.95;
-    }
-
-    .pill{
-      border-radius:var(--radius-pill);
-      padding:6px 12px;
-      border:1px solid rgba(255,255,255,0.22);
-      background:rgba(255,255,255,0.10);
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-    }
-    .pill-dot{
-      width:9px; height:9px;
-      border-radius:999px;
-      background:var(--green);
-      box-shadow:0 0 0 2px rgba(0,0,0,0.10);
-    }
-
-    /* Main layout */
-    main{
-      padding:16px clamp(16px, 3vw, 36px) 36px;
-      max-width:1200px;
-      width:100%;
-      margin:0 auto;
-      display:grid;
-      grid-template-columns:minmax(0, 3fr) minmax(0, 2.3fr);
-      gap:22px;
-    }
-    @media (max-width:900px){
-      main{ grid-template-columns:1fr; }
-    }
-
-    /* Panels: flatter, squarer */
-    .programs-panel,
-    .details-panel{
-      background:var(--panel);
-      border:1px solid var(--border);
-      border-radius:var(--radius-md);
-      box-shadow:var(--shadow);
-    }
-
-    .programs-panel{ padding:16px; }
-    .details-panel{ padding:16px; display:flex; flex-direction:column; gap:12px; }
-
-    .panel-header{
-      display:flex;
-      justify-content:space-between;
-      align-items:flex-end;
-      gap:10px;
-      flex-wrap:wrap;
-      padding-bottom:12px;
-      margin-bottom:12px;
-      border-bottom:1px solid rgba(0,0,0,0.08);
-    }
-
-    .panel-title{ font-size:1.15rem; font-weight:700; }
-    .panel-subtitle{ font-size:0.90rem; color:var(--muted); margin-top:3px; }
-
-    /* Filters: flat, simple */
-    .filters{ display:flex; gap:8px; flex-wrap:wrap; }
-    .filter-wrapper{ position:relative; display:inline-flex; }
-    .filter-wrapper::after{
-      content:"▾";
-      position:absolute;
-      right:10px;
-      top:50%;
-      transform:translateY(-50%);
-      font-size:0.75rem;
-      color:rgba(0,0,0,0.55);
-      pointer-events:none;
-    }
-    .filter-select{
-      border-radius:var(--radius-pill);
-      border:1px solid rgba(0,0,0,0.18);
-      background:#fff;
-      padding:8px 30px 8px 12px;
-      font-size:0.84rem;
-      font-weight:700;
-      cursor:pointer;
-      appearance:none;
-    }
-    .filter-select:focus{ outline:none; box-shadow:var(--focus); border-color:rgba(125,170,111,0.7); }
-
-    /* Program grid */
-    .program-list{
-      display:grid;
-      grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
-      gap:12px;
-    }
-
-    /* Cards: less rounded, greener active */
-    .program-card{
-      width:100%;
-      text-align:left;
-      font-family:inherit;
-
-      background:#fff;
-      border:1px solid rgba(0,0,0,0.14);
-      border-radius:var(--radius-md);
-      padding:12px;
-      cursor:pointer;
-
-      transition:transform var(--speed), box-shadow var(--speed), border-color var(--speed), background var(--speed);
-    }
-    .program-card:hover{
-      transform:translateY(-1px);
-      box-shadow:0 6px 18px rgba(0,0,0,0.12);
-      border-color:rgba(70,127,156,0.55);
-      background:rgba(177,195,205,0.18);
-    }
-    .program-card:focus{ outline:none; box-shadow:var(--focus); border-color:rgba(125,170,111,0.7); }
-    .program-card.active{
-      border-color:rgba(125,170,111,0.95);
-      background:rgba(125,170,111,0.10);
-      box-shadow:0 0 0 3px rgba(125,170,111,0.18);
-    }
-
-    .program-name{ font-weight:700; font-size:0.96rem; }
-
-    .badge{
-      display:inline-block;
-      padding:3px 8px;
-      border-radius:var(--radius-pill);
-      font-size:0.72rem;
-      border:1px solid rgba(0,0,0,0.16);
-      background:#fff;
-      color:rgba(0,0,0,0.70);
-      font-weight:700;
-    }
-    .badge-standards{
-      border:1px solid rgba(36,65,145,0.22);
-      background:rgba(36,65,145,0.08);
-      color:var(--blue-2);
-    }
-
-    .meta-row{ display:flex; flex-wrap:wrap; gap:6px; font-size:0.74rem; }
-    .meta-row span{
-      padding:2px 8px;
-      border-radius:var(--radius-pill);
-      background:rgba(0,0,0,0.03);
-      border:1px solid rgba(0,0,0,0.10);
-      font-weight:700;
-      color:rgba(0,0,0,0.65);
-    }
-
-    .description{ font-size:0.84rem; color:var(--muted); line-height:1.45; margin:0; }
-
-    .format-row{ display:flex; flex-wrap:wrap; gap:6px; }
-    .format-pill{
-      font-size:0.72rem;
-      border-radius:var(--radius-pill);
-      padding:2px 8px;
-      background:rgba(70,127,156,0.12);
-      border:1px solid rgba(70,127,156,0.22);
-      color:var(--blue-2);
-      font-weight:700;
-    }
-
-    .quick-cost{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      margin-top:8px;
-      font-size:0.78rem;
-      color:rgba(0,0,0,0.65);
-    }
-    .quick-cost strong{ color:var(--green); font-weight:800; font-size:0.95rem; }
-
-    /* Details */
-    .details-title{ font-size:1.10rem; font-weight:700; }
-    .details-sub{ font-size:0.90rem; color:var(--muted); margin-top:2px; }
-
-    .tag-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
-    .tag{
-      font-size:0.74rem;
-      padding:3px 9px;
-      border-radius:var(--radius-pill);
-      border:1px solid rgba(36,65,145,0.20);
-      background:rgba(36,65,145,0.08);
-      color:var(--blue-2);
-      font-weight:700;
-    }
-
-    .section-label{
-      font-size:0.78rem;
-      text-transform:uppercase;
-      letter-spacing:0.08em;
-      color:rgba(0,0,0,0.60);
-      margin-bottom:6px;
-      font-weight:700;
-    }
-
-    .muted{ color:var(--muted); font-size:0.90rem; }
-
-    /* Cost inputs */
-    .cost-grid{
-      display:grid;
-      grid-template-columns:minmax(0, 1.3fr) minmax(0, 1.2fr);
-      gap:12px;
-    }
-    @media (max-width:600px){ .cost-grid{ grid-template-columns:1fr; } }
-
-    .input-group{ display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
-    label{ font-size:0.86rem; font-weight:700; color:rgba(0,0,0,0.65); }
-
-    input[type="number"], select{
-      border-radius:var(--radius-sm);
-      border:1px solid rgba(0,0,0,0.18);
-      background:#fff;
-      padding:9px 10px;
-      font-size:0.90rem;
-      font-weight:700;
-      outline:none;
-    }
-    input[type="number"]:focus, select:focus{ box-shadow:var(--focus); border-color:rgba(125,170,111,0.7); }
-
-    .cost-summary{
-      border-radius:var(--radius-sm);
-      border:1px solid rgba(0,0,0,0.14);
-      background:#fff;
-      padding:12px;
-      display:grid;
-      grid-template-columns:repeat(2, minmax(0, 1fr));
-      gap:10px;
-    }
-    .cost-item-label{ font-size:0.82rem; color:rgba(0,0,0,0.60); font-weight:700; }
-    .cost-main{ font-size:1.12rem; font-weight:800; color:var(--blue-2); }
-    .cost-sub{ font-size:1.02rem; font-weight:800; color:var(--green); }
-    .cost-footnote{ font-size:0.78rem; color:rgba(0,0,0,0.55); margin-top:4px; }
-
-    /* Session chips */
-    .session-chips{ display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 2px; }
-    .session-chip{
-      font-size:0.74rem;
-      padding:4px 9px;
-      border-radius:var(--radius-pill);
-      border:1px solid rgba(70,127,156,0.28);
-      background:rgba(70,127,156,0.12);
-      color:var(--blue-2);
-      font-weight:700;
-    }
-
-    .error-text{
-      font-size:0.80rem;
-      color:#b42318;
-      min-height:1em;
-      font-weight:700;
-    }
-
-    /* Form panel: like site blocks (flat header) */
-    .form-panel{
-      border-radius:var(--radius-sm);
-      border:1px solid rgba(0,0,0,0.14);
-      overflow:hidden;
-      box-shadow:var(--shadow);
-      background:#fff;
-    }
-    .form-panel-header{
-      padding:10px 12px;
-      background:var(--site-green);
-      color:#fff;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:10px;
-      font-weight:700;
-      font-size:0.90rem;
-    }
-
-    /* Button like your screenshot: white rectangle, blue text, minimal rounding */
-    .form-panel-header button{
-      border-radius:3px;
-      border:1px solid rgba(255,255,255,0.65);
-      background:#fff;
-      color:var(--blue-3);
-      padding:7px 12px;
-      font-weight:700;
-      cursor:pointer;
-      transition:transform var(--speed), box-shadow var(--speed);
-    }
-    .form-panel-header button:hover{
-      transform:translateY(-1px);
-      box-shadow:0 4px 10px rgba(0,0,0,0.10);
-    }
-    .form-panel iframe{
-      width:100%;
-      height:360px;
-      border:none;
-      background:#fff;
-    }
-  </style>
-</head>
-
-<body>
-<div class="page">
-  <header>
-    <div class="brand">
-      <div class="brand-mark"></div>
-      <div class="brand-text">
-        <span>Estuarium Education Project</span>
-        <span>Teacher Program Selector</span>
-      </div>
-    </div>
-    <div class="header-right">
-      <div class="pill">
-        <span class="pill-dot"></span>
-        <span>Booking window now open</span>
-      </div>
-      <span>Choose a program, preview cost, and submit your inquiry.</span>
-    </div>
-  </header>
-
-  <main>
-    <section class="programs-panel">
-      <div class="panel-header">
-        <div>
-          <div class="panel-title">Programs at a glance</div>
-          <div class="panel-subtitle">Filter by grade band or pillar and click a card to see details.</div>
-        </div>
-        <div class="filters">
-          <div class="filter-wrapper">
-            <select id="gradeFilter" class="filter-select">
-              <option value="">All grade bands</option>
-              <option value="PreK-2">PreK–2</option>
-              <option value="3-5">Grades 3–5</option>
-              <option value="6-8">Grades 6–8</option>
-              <option value="8-10">Grades 8–10</option>
-              <option value="10-12">Grades 10–12</option>
-              <option value="Adult">Adult</option>
-            </select>
-          </div>
-          <div class="filter-wrapper">
-            <select id="pillarFilter" class="filter-select">
-              <option value="">All pillars</option>
-              <option value="ELI">Estuarium Learning Initiative</option>
-              <option value="EAN">Estuarium Action Network</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div id="programList" class="program-list"></div>
-    </section>
-
-    <section class="details-panel">
-      <div>
-        <div id="detailsTitle" class="details-title">Select a program to begin</div>
-        <div id="detailsSub" class="details-sub">
-          Quick description, standards, and session formats will appear here.
-        </div>
-      </div>
-
-      <div id="detailsTags" class="tag-row"></div>
-
-      <div style="margin-top: 8px;">
-        <div class="section-label">Program overview</div>
-        <p id="detailsDescription" class="muted">
-          Use the filters on the left to narrow by grade band or pillar, then click a program card.
-        </p>
-        <div class="session-chips" id="detailsSessions"></div>
-      </div>
-
-      <div style="margin-top: 8px;">
-        <div class="section-label">Estimate your program cost</div>
-        <div class="cost-grid">
-          <div>
-            <div class="input-group">
-              <label for="inputParticipants">Number of participants</label>
-              <input type="number" id="inputParticipants" min="1" value="25" />
-            </div>
-            <div class="input-group">
-              <label for="inputHours">Program length (hours)</label>
-              <input type="number" id="inputHours" min="0.5" step="0.5" value="2" />
-            </div>
-            <div class="input-group">
-              <label for="inputFormat">Session format</label>
-              <select id="inputFormat">
-                <option value="field">1-day field trip</option>
-                <option value="multi">Multi-week series</option>
-                <option value="camp">5-day camp</option>
-                <option value="virtual">Virtual / on-campus</option>
-              </select>
-            </div>
-            <div class="error-text" id="inputError"></div>
-          </div>
-
-          <div>
-            <div class="cost-summary">
-              <div>
-                <div class="cost-item-label">Estimated total</div>
-                <div id="totalCost" class="cost-main">$0.00</div>
-                <div class="cost-footnote">Includes instruction and coordination.</div>
-              </div>
-              <div>
-                <div class="cost-item-label">Per participant</div>
-                <div id="perParticipant" class="cost-sub">$0.00</div>
-                <div class="cost-footnote">From current group size.</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <p class="cost-footnote">
-          This is a working estimate; final pricing confirmed after inquiry.
-        </p>
-      </div>
-
-      <div>
-        <div class="section-label">Submit a program inquiry</div>
-        <p class="muted">The form will prefill the program name you selected.</p>
-
-        <div class="form-panel">
-          <div class="form-panel-header">
-            <span id="formProgramLabel">No program selected yet</span>
-            <button type="button" onclick="openFormInNewTab()">Open in new tab</button>
-          </div>
-          <iframe
-            id="inquiryFormFrame"
-            title="Estuarium Program Inquiry"
-            src="https://docs.google.com/forms/d/e/1FAIpQLSdHIjWiwmRy14Est89RnyVMbHxuHUyKDItmp3DNHAJXzRK1jQ/viewform?embedded=true">
-          </iframe>
-        </div>
-      </div>
-    </section>
-  </main>
-</div>
+<!-- 2) Updated Pillar Filter (add ESI + “Foundation/Partner/Public” lanes) -->
+<select id="pillarFilter" class="filter-select">
+  <option value="">All categories</option>
+  <option value="ELI">K–12 Education (ELI)</option>
+  <option value="EAN">Community Engagement (EAN)</option>
+  <option value="ESI">Visitor Center & Stewardship (ESI)</option>
+  <option value="Foundation">Foundation Series</option>
+  <option value="Partner">Partner Series</option>
+</select>
 
 <script>
+/* 3) Expanded PROGRAMS
+   Notes on mapping:
+   - K–12 / camps / kits / field trips = ELI
+   - Community programs, volunteer training, public tours = EAN (and Foundation/Partner where relevant)
+   - Visitor-center experiences and access programming = ESI
+   - Some items are resources/exhibits; those set costEligible:false so the estimator clearly shows N/A
+*/
 const PROGRAMS = [
+  /* --- SoundPath / EEP programs you already had --- */
   {
     id: "sound-sprouts",
     name: "Sound Sprouts",
     gradeBand: "PreK-2",
     pillar: "ELI",
+    series: "SoundPath",
     standards: "Foundational NGSS, SEL early childhood",
-    sessions: ["10-week: Around the Sound with Caregiver", "4-week: Bring the Outside In"],
-    formats: ["10-week", "4-week", "1-day field trip"],
-    gradeLabel: "Infant–PreK with caregiver",
-    shortDescription: "Playful, sensory-based estuary exploration for caregivers and young children.",
+    sessions: ["Bring the Outside In"],
+    formats: ["2-3 hours"],
+    gradeLabel: "Infant–PreK with caregiver only",
+    shortDescription: "Indoor playful, sensory-based estuary exploration for caregivers and young children.",
+    costEligible: true,
   },
   {
     id: "little-sound-scouts",
     name: "Little Sound Scouts",
     gradeBand: "PreK-2",
     pillar: "ELI",
+    series: "SoundPath",
     standards: "NGSS K-ESS2-1, K-LS1-1; SEL",
     sessions: ["10-week: Seasons Around the Sound", "4-week: Small Scientists by the Shore", "5-day camp: My Estuary Adventure", "1-day: Little Beachcombers"],
     formats: ["10-week", "4-week", "5-day camp", "1-day field trip"],
     gradeLabel: "Grades K–2",
     shortDescription: "Early elementary nature adventures focusing on observation, wonder, and estuary exploration.",
+    costEligible: true,
   },
   {
     id: "sound-detectives",
     name: "Sound Detectives",
     gradeBand: "3-5",
     pillar: "ELI",
+    series: "SoundPath",
     standards: "NGSS 3-LS4-3, 4-ESS2-2, 5-PS1-3",
     sessions: ["10-week: Unlocking Estuary Mysteries", "4-week: Intro to Investigation", "5-day camp: Shifting Shoreline", "1-day: Junior Investigator"],
     formats: ["10-week", "4-week", "5-day camp", "1-day field trip"],
     gradeLabel: "Grades 2–5 / 3–5 focus",
     shortDescription: "Inquiry-based field science where students collect data, map habitats, and solve estuary mysteries.",
+    costEligible: true,
   },
   {
     id: "eco-navigators",
     name: "Eco Navigators",
     gradeBand: "6-8",
     pillar: "ELI",
+    series: "SoundPath",
     standards: "Middle school NGSS (LS2.A, ESS3.C)",
     sessions: ["10-week: Unlocking Estuary Mysteries", "4-week: Four-Way Compass", "5-day camp: Estuary Action Lab"],
     formats: ["10-week", "4-week", "5-day camp", "1-day field trip"],
     gradeLabel: "Grades 6–8",
     shortDescription: "Middle school field program using navigation, mapping, and stewardship projects.",
+    costEligible: true,
   },
   {
     id: "echo-sounders",
     name: "Echo Sounders",
     gradeBand: "8-10",
     pillar: "ELI",
+    series: "SoundPath",
     standards: "MS-LS2-2, MS-LS2-5, MS-ESS3-3",
     sessions: ["10-week: Science for Belonging", "4-week: Field Science Foundations", "5-day camp: Echoes from the Shore", "1-day: Science Belongs to You"],
     formats: ["10-week", "4-week", "5-day camp", "1-day intensive"],
     gradeLabel: "Grades 8–10",
-    shortDescription: "Identity-centered field science blending rigorous research with belonging and leadership.",
+    shortDescription: "Field science that builds teamwork, research skills, and leadership readiness.",
+    costEligible: true,
   },
   {
     id: "sound-quest",
     name: "SoundQuest",
     gradeBand: "8-10",
     pillar: "ELI",
+    series: "SoundPath",
     standards: "MS-LS2-1, MS-LS2-5, MS-ESS3-3",
     sessions: ["10-week: Queer Ecology in Action", "4-week: Estuary, Identity, and Action", "5-day camp: Field Science for Queer Belonging", "1-day: Estuary Identity intensive"],
     formats: ["10-week", "4-week", "5-day camp", "1-day intensive"],
     gradeLabel: "Grades 8–12 and LGBTQIA youth",
     shortDescription: "Queer-inclusive estuary program combining field science, arts, and identity-affirming leadership.",
+    costEligible: true,
   },
   {
     id: "sound-scholars",
     name: "Sound Scholars",
     gradeBand: "10-12",
     pillar: "ELI",
+    series: "SoundPath",
     standards: "HS-LS2-6, HS-ESS3-4, HS-ETS1-3",
     sessions: ["10-week: Leadership Through Estuary Science", "4-week: Youth Science in Action", "5-day camp: Science, Stewardship, and Story", "1-day: Lead Like a Scientist"],
     formats: ["10-week", "4-week", "5-day camp", "1-day intensive"],
     gradeLabel: "Grades 10–12",
     shortDescription: "Advanced high school field research, science communication, and youth leadership.",
+    costEligible: true,
   },
   {
     id: "sound-trekkers",
     name: "Sound Trekkers",
     gradeBand: "Adult",
     pillar: "EAN",
-    standards: "Adult NGSS-aligned field science",
+    series: "SoundPath",
+    standards: "Adult field science and stewardship learning",
     sessions: ["10-week: Knowing the Sound, Caring for the Sound", "4-week: Estuary Essentials", "5-day: Field Science for Everyday People", "1-day: Walk the Estuary"],
     formats: ["10-week", "4-week", "5-day mini course", "1-day intensive"],
     gradeLabel: "Adults 18+",
     shortDescription: "Immersive adult field program for aspiring naturalists and community stewards.",
+    costEligible: true,
   },
   {
     id: "our-sound-selves",
     name: "Our Sound Selves",
     gradeBand: "Adult",
-    pillar: "EAN",
-    standards: "NGSS crosscutting concepts; SEL for adults",
+    pillar: "ESI",
+    series: "SoundPath",
+    standards: "Ecological literacy + reflective learning",
     sessions: ["10-week: The Estuary Within", "4-week: Reflections in the Water", "5-day: Echoes of the Estuary", "1-day: The Sound Within"],
     formats: ["10-week", "4-week", "5-day mini course", "1-day workshop"],
     gradeLabel: "Adults 18+",
-    shortDescription: "Reflective estuary program connecting ecological literacy with emotional wellbeing and story.",
+    shortDescription: "Estuary learning that connects science, personal reflection, and stewardship.",
+    costEligible: true,
+  },
+
+  /* --- Programs found on pugetsoundestuarium.org --- */
+
+  /* K–12 / Education (ELI) */
+  {
+    id: "field-trips-prek-12",
+    name: "Field Trips (PreK–12)",
+    gradeBand: "All Ages",
+    pillar: "ELI",
+    series: "ELI",
+    standards: "NGSS-aligned place-based learning",
+    sessions: ["Custom field trip modules by grade band"],
+    formats: ["Field trip", "On-site", "Off-site"],
+    gradeLabel: "PreK–12",
+    shortDescription: "School field experiences connecting students to Puget Sound estuaries through hands-on learning.",
+    costEligible: true,
+  },
+  {
+    id: "school-estuary-kits",
+    name: "School Estuary Kits (Checkout & Purchase)",
+    gradeBand: "All Ages",
+    pillar: "ELI",
+    series: "ELI",
+    standards: "Classroom-ready estuary science resources",
+    sessions: ["Kit checkout: multiple estuary themes"],
+    formats: ["Curriculum kit", "Classroom"],
+    gradeLabel: "K–12 (kit-based)",
+    shortDescription: "Estuary-themed classroom kits available for checkout to support teacher-led learning. Use form to purchase.",
+    costEligible: false, // often free/loaner; keep estimator from implying pricing
+  },
+  {
+    id: "bayshore-fieldstem",
+    name: "Bayshore FieldSTEM",
+    gradeBand: "6-8",
+    pillar: "ELI",
+    series: "Partner",
+    standards: "FieldSTEM model; NGSS-aligned",
+    sessions: ["Field-based STEM learning at Bayshore Preserve"],
+    formats: ["Field program", "Partner site"],
+    gradeLabel: "7th grade focus",
+    shortDescription: "Outdoor STEM learning at Bayshore Preserve using a FieldSTEM approach.",
+    costEligible: true,
+  },
+  {
+    id: "estuary-life-landforms",
+    name: "Estuary Life & Landforms (ELL)",
+    gradeBand: "3-5",
+    pillar: "ELI",
+    series: "ELI",
+    standards: "Place-based estuary science (virtual/in-classroom)",
+    sessions: ["Virtual learning experience (program module)"],
+    formats: ["Virtual", "On-campus"],
+    gradeLabel: "5th grade focus",
+    shortDescription: "Virtual or on-campus learning about Budd Inlet, estuary habitats, and landforms.",
+    costEligible: true,
+  },
+  {
+    id: "estuary-explorers-summer-camp",
+    name: "Estuary Explorers Summer Camp",
+    gradeBand: "3-5",
+    pillar: "ELI",
+    series: "Foundation",
+    standards: "Hands-on marine and estuary science",
+    sessions: ["Summer camp sessions (seasonal)"],
+    formats: ["Camp", "Multi-day"],
+    gradeLabel: "Grades 2–8",
+    shortDescription: "Hands-on summer camp focused on estuary exploration, discovery, and field science.",
+    costEligible: true,
+  },
+  {
+    id: "estuary-investigation-camps",
+    name: "Estuary Investigation Camps",
+    gradeBand: "8-12",
+    pillar: "ELI",
+    series: "Foundation",
+    standards: "Field investigation and applied ecology",
+    sessions: ["Seasonal investigation camps (multi-day)"],
+    formats: ["Camp", "Multi-day"],
+    gradeLabel: "Grades 8–12",
+    shortDescription: "Multi-day investigation camps for older youth featuring deeper field science and inquiry.",
+    costEligible: true,
+  },
+
+  /* Community Programs (EAN, Foundation/Partner Series) */
+  {
+    id: "pier-peer",
+    name: "Pier Peer",
+    gradeBand: "All Ages",
+    pillar: "EAN",
+    series: "Foundation",
+    standards: "Community science and species ID",
+    sessions: ["Nighttime pier exploration (event)"],
+    formats: ["Public event", "Night program"],
+    gradeLabel: "All ages (youth and adult ticketing)",
+    shortDescription: "Nighttime dockside exploration using underwater lights to discover estuary creatures with staff guidance.",
+    costEligible: true,
+  },
+  {
+    id: "meet-the-beach",
+    name: "Meet the Beach",
+    gradeBand: "All Ages",
+    pillar: "EAN",
+    series: "Foundation",
+    standards: "Intertidal ecology and community learning",
+    sessions: ["Low-tide shoreline exploration (seasonal series)"],
+    formats: ["Public program", "Low tide", "Volunteer-supported"],
+    gradeLabel: "All ages",
+    shortDescription: "Low-tide shoreline program supported by trained Beach Naturalists for species ID and intertidal discovery.",
+    costEligible: true,
+  },
+  {
+    id: "beach-naturalist-training",
+    name: "Beach Naturalist Training",
+    gradeBand: "Adult",
+    pillar: "EAN",
+    series: "Foundation",
+    standards: "Volunteer training for shoreline interpretation",
+    sessions: ["Training sessions (webinar and/or field learning)"],
+    formats: ["Training", "Volunteer"],
+    gradeLabel: "Adults (volunteers)",
+    shortDescription: "Training program preparing volunteers to support Meet the Beach with interpretive and ID skills.",
+    costEligible: false,
+  },
+  {
+    id: "downtown-tours",
+    name: "Downtown Tours",
+    gradeBand: "All Ages",
+    pillar: "EAN",
+    series: "Foundation",
+    standards: "Urban ecology and shoreline interpretation",
+    sessions: ["Urban Birding", "Sea Stroll (historic shoreline tour)"],
+    formats: ["Guided tour", "Public program"],
+    gradeLabel: "All ages",
+    shortDescription: "Guided tours in downtown Olympia including urban birding and shoreline-focused Sea Stroll experiences.",
+    costEligible: true,
+  },
+  {
+    id: "urban-birding",
+    name: "Urban Birding",
+    gradeBand: "All Ages",
+    pillar: "EAN",
+    series: "Partner",
+    standards: "Bird identification and urban habitat learning",
+    sessions: ["Guided birding tour (event)"],
+    formats: ["Guided tour", "Public program"],
+    gradeLabel: "All ages",
+    shortDescription: "Guided urban birding tour highlighting local species and habitat connections.",
+    costEligible: true,
+  },
+  {
+    id: "sea-stroll",
+    name: "Sea Stroll (Historic Shoreline Tours)",
+    gradeBand: "All Ages",
+    pillar: "EAN",
+    series: "Partner",
+    standards: "Shoreline change, history, and place-based learning",
+    sessions: ["Guided shoreline tour (event)"],
+    formats: ["Guided tour", "Public program"],
+    gradeLabel: "All ages",
+    shortDescription: "Guided shoreline walks connecting local history with estuary ecology.",
+    costEligible: true,
+  },
+  {
+    id: "discovery-speaker-series",
+    name: "Discovery Speaker Series",
+    gradeBand: "Adult",
+    pillar: "EAN",
+    series: "Foundation",
+    standards: "Public learning: science, restoration, stewardship",
+    sessions: ["Talks with scientists, educators, artists, and advocates"],
+    formats: ["Lecture", "Community event"],
+    gradeLabel: "Adult-leaning (open to all)",
+    shortDescription: "Free public talks featuring local research, restoration, and community learning.",
+    costEligible: false,
+  },
+  {
+    id: "private-events",
+    name: "Private Events (Program Bookings)",
+    gradeBand: "All Ages",
+    pillar: "EAN",
+    series: "Foundation",
+    standards: "Custom program delivery for groups",
+    sessions: ["Private booking options for select programs"],
+    formats: ["Private booking", "Group program"],
+    gradeLabel: "All ages (group-based)",
+    shortDescription: "Private bookings of select programs like Pier Peer, Meet the Beach, Urban Birding, and Sea Stroll. Fun for birthday parties. Facility also available to rent.",
+    costEligible: true,
+  },
+
+  /* Visitor Center / Stewardship / Access (ESI) */
+  {
+    id: "tiny-tides-storytime",
+    name: "Tiny Tides Storytime",
+    gradeBand: "PreK-2",
+    pillar: "ESI",
+    series: "Foundation",
+    standards: "Early literacy + estuary themes",
+    sessions: ["Monthly storytime + exhibit exploration"],
+    formats: ["Visitor center", "Monthly program"],
+    gradeLabel: "Families (children 12 and under with caregivers)",
+    shortDescription: "Estuary-themed storytime for families, often paired with exhibit exploration and animal learning moments.",
+    costEligible: false,
+  },
+  {
+    id: "sensory-hour",
+    name: "Sensory Hour",
+    gradeBand: "All Ages",
+    pillar: "ESI",
+    series: "Foundation",
+    standards: "Inclusive access and sensory-friendly learning",
+    sessions: ["Monthly sensory-friendly open hours"],
+    formats: ["Visitor center", "Access program"],
+    gradeLabel: "All ages",
+    shortDescription: "Sensory-friendly access hour designed to reduce barriers and support comfortable learning for all visitors.",
+    costEligible: false,
   },
 ];
 
+/* 4) Updated COST_CONFIG: adds All Ages + keeps your existing model */
 const COST_CONFIG = {
   baseCoordinationFee: 50,
   hourlyRatePerInstructor: 25,
   markupMultiplier: 1.8,
   formats: { field: 1.0, multi: 1.15, camp: 1.25, virtual: 0.9 },
-  ratios: { "PreK-2": 6, "3-5": 8, "6-8": 10, "8-10": 10, "10-12": 12, Adult: 15, default: 12 },
+
+  // Add All Ages. Keep ratios conservative.
+  ratios: {
+    "PreK-2": 6,
+    "3-5": 8,
+    "6-8": 10,
+    "8-10": 10,
+    "10-12": 12,
+    "Adult": 15,
+    "All Ages": 12,
+    default: 12
+  },
 };
 
-let activeProgramId = null;
-
+/* 5) Update calculateCost + recalc to handle costEligible:false programs */
 function calculateCost(program, participants, hours, formatKey) {
+  // If not cost-eligible (resource/exhibit/training), return zeros
+  if (program && program.costEligible === false) {
+    return { totalProgramCost: 0, pricePerParticipant: 0, notApplicable: true };
+  }
+
   const ratio = COST_CONFIG.ratios[program.gradeBand] ?? COST_CONFIG.ratios.default;
   const instructors = participants > 0 ? Math.ceil(participants / ratio) : 0;
   const staffCost = instructors * COST_CONFIG.hourlyRatePerInstructor * hours;
   const formatMult = COST_CONFIG.formats[formatKey] ?? COST_CONFIG.formats.field;
+
   const subtotal = staffCost + COST_CONFIG.baseCoordinationFee;
   const totalProgramCost = subtotal * COST_CONFIG.markupMultiplier * formatMult;
   const pricePerParticipant = participants > 0 ? totalProgramCost / participants : 0;
-  return { totalProgramCost, pricePerParticipant };
-}
 
-function renderPrograms() {
-  const gradeFilter = document.getElementById("gradeFilter").value;
-  const pillarFilter = document.getElementById("pillarFilter").value;
-  const listEl = document.getElementById("programList");
-  listEl.innerHTML = "";
-
-  PROGRAMS.forEach(prog => {
-    if (gradeFilter && prog.gradeBand !== gradeFilter) return;
-    if (pillarFilter && prog.pillar !== pillarFilter) return;
-
-    const card = document.createElement("button");
-    card.className = "program-card";
-    card.type = "button";
-    card.dataset.id = prog.id;
-    if (activeProgramId === prog.id) card.classList.add("active");
-
-    const est = calculateCost(prog, 25, 2, "field");
-
-    card.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-        <div class="program-name">${prog.name}</div>
-        <span class="badge badge-standards">${prog.standards}</span>
-      </div>
-      <div class="meta-row">
-        <span>${prog.gradeLabel}</span>
-        <span>Pillar: ${prog.pillar}</span>
-      </div>
-      <p class="description">${prog.shortDescription}</p>
-      <div class="format-row">
-        ${prog.formats.map(f => `<span class="format-pill">${f}</span>`).join("")}
-      </div>
-      <div class="quick-cost">
-        <span>Example: 25 students · 2 hr</span>
-        <span>from <strong>$${est.totalProgramCost.toFixed(0)}</strong></span>
-      </div>
-    `;
-
-    card.addEventListener("click", () => setActiveProgram(prog.id));
-    listEl.appendChild(card);
-  });
-
-  if (!activeProgramId && PROGRAMS.length > 0) {
-    const first = listEl.querySelector(".program-card");
-    if (first) setActiveProgram(first.dataset.id);
-  }
-}
-
-function setActiveProgram(id) {
-  const prog = PROGRAMS.find(p => p.id === id);
-  if (!prog) return;
-  activeProgramId = id;
-
-  document.querySelectorAll(".program-card").forEach(c => {
-    c.classList.toggle("active", c.dataset.id === id);
-  });
-
-  document.getElementById("detailsTitle").textContent = prog.name;
-  document.getElementById("detailsSub").textContent = `${prog.gradeLabel} · Pillar ${prog.pillar}`;
-  document.getElementById("detailsDescription").textContent = prog.shortDescription;
-
-  const tagsEl = document.getElementById("detailsTags");
-  tagsEl.innerHTML = `
-    <span class="tag">Grade band: ${prog.gradeBand}</span>
-    <span class="tag">${prog.standards}</span>
-  `;
-
-  const sessionsEl = document.getElementById("detailsSessions");
-  sessionsEl.innerHTML = prog.sessions.map(s =>
-    `<span class="session-chip"><strong>Session:</strong> ${s}</span>`
-  ).join("");
-
-  document.getElementById("formProgramLabel").textContent = `Inquiry form for: ${prog.name}`;
-  updateFormPrefill();
-  recalc();
+  return { totalProgramCost, pricePerParticipant, notApplicable: false };
 }
 
 function recalc() {
@@ -728,47 +421,31 @@ function recalc() {
 
   errorEl.textContent = "";
 
-  if (!activeProgramId || !participants || participants <= 0 || !hours || hours <= 0) {
-    if (participants <= 0 || hours <= 0) {
-      errorEl.textContent = "Enter positive numbers for participants and hours.";
-    }
+  if (!activeProgramId) {
     document.getElementById("totalCost").textContent = "$0.00";
     document.getElementById("perParticipant").textContent = "$0.00";
     return;
   }
 
   const prog = PROGRAMS.find(p => p.id === activeProgramId);
-  const { totalProgramCost, pricePerParticipant } = calculateCost(prog, participants, hours, formatKey);
 
-  document.getElementById("totalCost").textContent = `$${totalProgramCost.toFixed(2)}`;
-  document.getElementById("perParticipant").textContent = `$${pricePerParticipant.toFixed(2)}`;
+  // Handle non-applicable cost programs
+  const est = calculateCost(prog, participants, hours, formatKey);
+  if (est.notApplicable) {
+    document.getElementById("totalCost").textContent = "N/A";
+    document.getElementById("perParticipant").textContent = "N/A";
+    errorEl.textContent = "This item is a resource, exhibit, or training. Cost estimate is not applicable.";
+    return;
+  }
+
+  if (!participants || participants <= 0 || !hours || hours <= 0) {
+    errorEl.textContent = "Enter positive numbers for participants and hours.";
+    document.getElementById("totalCost").textContent = "$0.00";
+    document.getElementById("perParticipant").textContent = "$0.00";
+    return;
+  }
+
+  document.getElementById("totalCost").textContent = `$${est.totalProgramCost.toFixed(2)}`;
+  document.getElementById("perParticipant").textContent = `$${est.pricePerParticipant.toFixed(2)}`;
 }
-
-function updateFormPrefill() {
-  const baseUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdHIjWiwmRy14Est89RnyVMbHxuHUyKDItmp3DNHAJXzRK1jQ/viewform";
-  const prog = PROGRAMS.find(p => p.id === activeProgramId);
-  const url = prog
-    ? `${baseUrl}?embedded=true&entry.123456789=${encodeURIComponent(prog.name)}`
-    : `${baseUrl}?embedded=true`;
-  document.getElementById("inquiryFormFrame").src = url;
-}
-
-function openFormInNewTab() {
-  const baseUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdHIjWiwmRy14Est89RnyVMbHxuHUyKDItmp3DNHAJXzRK1jQ/viewform";
-  const prog = PROGRAMS.find(p => p.id === activeProgramId);
-  const url = prog
-    ? `${baseUrl}?entry.123456789=${encodeURIComponent(prog.name)}`
-    : baseUrl;
-  window.open(url, "_blank");
-}
-
-document.getElementById("inputParticipants").addEventListener("input", recalc);
-document.getElementById("inputHours").addEventListener("input", recalc);
-document.getElementById("inputFormat").addEventListener("change", recalc);
-document.getElementById("gradeFilter").addEventListener("change", renderPrograms);
-document.getElementById("pillarFilter").addEventListener("change", renderPrograms);
-
-renderPrograms();
 </script>
-</body>
-</html>
