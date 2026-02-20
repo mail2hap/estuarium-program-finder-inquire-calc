@@ -584,15 +584,6 @@
   </div>
 
 <script>
-  /*
-    Program Type values:
-    - Community Programs
-    - K-12 Programs
-    - Camps
-    - Private Tour
-    - Custom Inquiry
-  */
-
   const PROGRAMS = [
     /* SoundPath (K-12) */
     {
@@ -714,16 +705,19 @@
       shortDescription: "Estuary learning that connects science, personal reflection, and stewardship.",
       costEligible: true
     },
+
+    /* FIXED: On the Water Shoreline Edition */
     {
       id: "otw-shoreline",
       name: "On the Water Shoreline Edition",
-      gradeBand: ["6-8", "8-10", "10-12"],
+      gradeBand: "6-8",
+      gradeBands: ["6-8", "8-10", "10-12"],
       pillar: "EAN",
       programType: "K-12 Programs",
-      standards: "NGSS-aligned place-based learning; ",
-      sessions: ["Bring the Outside In"],
-      formats: ["3-4 hours"],
-      gradeLabel: ["Grades 6-8,"Grades 8-10","Grades 10-12"],
+      standards: "NGSS-aligned place-based learning",
+      sessions: ["Shoreline investigation and field science stations"],
+      formats: ["3–4 hours"],
+      gradeLabel: "Grades 6–12",
       shortDescription: "Shoreline Edition takes students to selected shoreline sites within Puget Sound’s estuarine ecosystems. There, students explore intertidal and nearshore zones, identify habitat features, and conduct structured observation and data collection.",
       costEligible: true
     },
@@ -945,11 +939,16 @@
     return false;
   }
 
+  function getRatioForProgram(program){
+    const band = typeof program.gradeBand === "string" ? program.gradeBand : null;
+    return COST_CONFIG.ratios[band] ?? COST_CONFIG.ratios.default;
+  }
+
   function calculateCost(program, participants, hours, formatKey) {
     if (program && program.costEligible === false) {
       return { totalProgramCost: 0, pricePerParticipant: 0, notApplicable: true };
     }
-    const ratio = COST_CONFIG.ratios[program.gradeBand] ?? COST_CONFIG.ratios.default;
+    const ratio = getRatioForProgram(program || {});
     const instructors = participants > 0 ? Math.ceil(participants / ratio) : 0;
     const staffCost = instructors * COST_CONFIG.hourlyRatePerInstructor * hours;
     const formatMult = COST_CONFIG.formats[formatKey] ?? COST_CONFIG.formats.field;
@@ -1038,10 +1037,14 @@
     document.getElementById("detailsSub").textContent = `${prog.programType} · ${gradeDisplay} · Pillar ${prog.pillar}`;
     document.getElementById("detailsDescription").textContent = prog.shortDescription;
 
+    const gradeTagValue = Array.isArray(prog.gradeBands) && prog.gradeBands.length
+      ? prog.gradeBands.join(", ")
+      : String(prog.gradeBand || "");
+
     const tagsEl = document.getElementById("detailsTags");
     tagsEl.innerHTML = `
       <span class="tag">Type: ${prog.programType}</span>
-      <span class="tag">Grade: ${prog.gradeBand}</span>
+      <span class="tag">Grade: ${gradeTagValue}</span>
       <span class="tag">Pillar: ${prog.pillar}</span>
       <span class="tag">${prog.standards}</span>
     `;
@@ -1089,10 +1092,6 @@
     document.getElementById("perParticipant").textContent = money(est.pricePerParticipant);
   }
 
-  /*
-    Prefill note:
-    Replace entry.476249865 with the real field ID from your Google Form if you want true prefill.
-  */
   function updateFormPrefill() {
     const baseUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdHIjWiwmRy14Est89RnyVMbHxuHUyKDItmp3DNHAJXzRK1jQ/viewform";
     const prog = PROGRAMS.find(p => p.id === activeProgramId);
@@ -1117,7 +1116,6 @@
     window.open(url, "_blank");
   }
 
-  /* Event listeners */
   document.getElementById("inputParticipants").addEventListener("input", recalc);
   document.getElementById("inputHours").addEventListener("input", recalc);
   document.getElementById("inputFormat").addEventListener("change", recalc);
@@ -1126,7 +1124,6 @@
   document.getElementById("pillarFilter").addEventListener("change", renderPrograms);
   document.getElementById("typeFilter").addEventListener("change", renderPrograms);
 
-  /* Initial render */
   renderPrograms();
 </script>
 </body>
