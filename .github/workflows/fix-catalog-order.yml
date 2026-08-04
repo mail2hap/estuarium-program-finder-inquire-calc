@@ -1,0 +1,55 @@
+name: Fix catalog order and program grouping
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-catalog-order.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix-page:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reorder catalog and distinguish program groups
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('index.html')
+          text = path.read_text()
+
+          def extract(section_start):
+              global text
+              start = text.index(section_start)
+              end = text.index('</section>', start) + len('</section>')
+              block = text[start:end]
+              text = text[:start] + text[end:]
+              return block
+
+          journey = extract('<section class="journey browse" id="journey">')
+          career = extract('<section class="career browse" id="career">')
+
+          detail_start = text.index('<section class="detailwrap" id="detailwrap">')
+          detail_end = text.index('</section>', detail_start) + len('</section>')
+          text = text[:detail_end] + journey + career + text[detail_end:]
+
+          text = text.replace('.card.pilotcard{border-top:5px solid var(--g)}', '.card.pilotcard{border-top:5px solid var(--g)}.card.k12card{border-top:8px solid var(--n)}.card.communitycard{border-top:8px solid var(--t)}')
+
+          old = "c.className='card'+(p.pilot?' pilotcard':'');"
+          new = "let isCommunity=['Community Learning','Private Group Experience','Adult Learning'].includes(p.category);let isK12=p.grades.length>0||['Early Learning','School Field Experience','Curriculum Kit','Youth Leadership','Career Readiness'].includes(p.category);c.className='card'+(p.pilot?' pilotcard':'')+(isCommunity?' communitycard':isK12?' k12card':'');"
+          if old not in text:
+              raise SystemExit('Card class insertion point not found')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+      - name: Commit corrected page
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Place full catalog before featured programs' || exit 0
+          git push
