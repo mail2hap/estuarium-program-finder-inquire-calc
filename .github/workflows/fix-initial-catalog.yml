@@ -1,0 +1,50 @@
+name: Fix initial catalog display
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-initial-catalog.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix-initial-state:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reset filters and render catalog on every page open
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('index.html')
+          text = path.read_text()
+          marker = "</script>"
+          fix = """
+// Always open in the complete-catalog state, including browser back/forward restores.
+function showCompleteCatalogOnOpen(){
+  [A,E,G,S].forEach(control => control.value = '');
+  const detail = document.getElementById('detail');
+  if (detail) detail.classList.remove('show');
+  render();
+}
+showCompleteCatalogOnOpen();
+window.addEventListener('pageshow', showCompleteCatalogOnOpen);
+"""
+          if 'function showCompleteCatalogOnOpen()' not in text:
+              if marker not in text:
+                  raise SystemExit('Closing script tag not found')
+              text = text.replace(marker, fix + marker, 1)
+          path.write_text(text)
+          PY
+      - name: Commit page fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m 'Show full catalog on initial page load'
+          git push
