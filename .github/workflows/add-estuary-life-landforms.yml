@@ -1,0 +1,42 @@
+name: Add Estuary Life and Landforms
+
+on:
+  push:
+    paths:
+      - '.github/workflows/add-estuary-life-landforms.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update-program-page:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add program entry
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('index.html')
+          text = path.read_text()
+          if "id:'estuary-life-landforms'" in text:
+              print('Program already present.')
+              raise SystemExit(0)
+
+          needle = "},{id:'meet-beach'"
+          entry = "},{id:'estuary-life-landforms',name:'Estuary Life and Landforms',category:'School Field Experience',grades:['5'],gradeLabel:'Grade 5',audiences:['School or classroom','Youth organization','Educator'],settings:['At the Estuarium','At a beach or park'],format:'Hands-on field trip and historic shoreline investigation',summary:'Students investigate the historic shorelines of Budd Inlet and Capitol Lake, the role of sediment in an estuary, Olympia oysters, dredging, and human-caused changes through hands-on science, landform modeling, and a guided shoreline walk.',tags:['Grade 5','Landforms','Historic shoreline'],pilot:0,cost:1,fieldTrip:1},{id:'meet-beach'"
+          if needle not in text:
+              raise SystemExit('Expected insertion point was not found.')
+          path.write_text(text.replace(needle, entry, 1))
+          PY
+      - name: Commit update
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Add Estuary Life and Landforms program'
+          git push
