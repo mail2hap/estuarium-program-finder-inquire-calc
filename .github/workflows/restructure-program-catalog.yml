@@ -1,0 +1,64 @@
+name: Restructure program catalog
+
+on:
+  push:
+    paths:
+      - '.github/workflows/restructure-program-catalog.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update-program-page:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reorder catalog and distinguish program types
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('index.html')
+          text = path.read_text()
+
+          # Move the full program catalog ahead of the SoundPath and Career Readiness features.
+          start_journey = text.index('<section class="journey browse" id="journey">')
+          start_results = text.index('<div class="resultshead">')
+          end_details = text.index('</section></main>')
+          journey_and_career = text[start_journey:start_results]
+          results_and_details = text[start_results:end_details]
+          text = text[:start_journey] + results_and_details + journey_and_career + text[end_details:]
+
+          # Add visual styles for program-type headers.
+          style_needle = '.card.pilotcard{border-top:5px solid var(--g)}'
+          style_replacement = style_needle + '.programtype{margin:-18px -18px 14px;padding:9px 18px;border-radius:17px 17px 0 0;color:#fff;font-size:.75rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.programtype.k12{background:var(--n)}.programtype.community{background:var(--t)}.card.communitycard{border-color:rgba(70,127,156,.45)}'
+          text = text.replace(style_needle, style_replacement, 1)
+
+          # Define which entries are community programs.
+          marker = "const J=['sound-sprouts'"
+          community_def = "const COMMUNITY_IDS=['meet-beach','pier-peer','sea-stroll','urban-birding','sound-trekkers','our-sound-selves'];"
+          if community_def not in text:
+              text = text.replace(marker, community_def + marker, 1)
+
+          # Add type-specific class and header banner to every program card.
+          old_class = "c.className='card'+(p.pilot?' pilotcard':'');"
+          new_class = "let isCommunity=COMMUNITY_IDS.includes(p.id);c.className='card'+(p.pilot?' pilotcard':'')+(isCommunity?' communitycard':'');"
+          text = text.replace(old_class, new_class, 1)
+
+          old_markup = "c.innerHTML=`${p.pilot?'<span class=\"pilot\">Pilot coming soon...</span>':''}${p.fieldTrip?'<span class=\"fieldtrip\">K–12 FIELD TRIP OPTION</span>':''}<div class=\"kicker\">${p.category}</div>"
+          new_markup = "c.innerHTML=`<div class=\"programtype ${isCommunity?'community':'k12'}\">${isCommunity?'Community Program':'K–12 Program'}</div>${p.pilot?'<span class=\"pilot\">Pilot coming soon...</span>':''}${p.fieldTrip?'<span class=\"fieldtrip\">K–12 FIELD TRIP OPTION</span>':''}<div class=\"kicker\">${p.category}</div>"
+          text = text.replace(old_markup, new_markup, 1)
+
+          # Make the unfiltered heading explicit.
+          text = text.replace("$('resultstitle').textContent=f?'Matching programs':'Programs and experiences';", "$('resultstitle').textContent=f?'Matching programs':'All Estuarium programs';", 1)
+          text = text.replace("$('resultscopy').textContent=f?'Only programs matching your selections are shown below.':'Current offerings and developing pilot opportunities.';", "$('resultscopy').textContent=f?'Only programs matching your selections are shown below.':'Browse the complete catalog of K–12 and community programs.';", 1)
+
+          path.write_text(text)
+          PY
+      - name: Commit update
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Show full catalog first and distinguish community programs'
+          git push
